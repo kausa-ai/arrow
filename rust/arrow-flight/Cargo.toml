@@ -26,7 +26,7 @@ repository = "https://github.com/apache/arrow"
 license = "Apache-2.0"
 
 [dependencies]
-arrow = { path = "../arrow", version = "1.0.1" }
+arrow = { path = "../arrow" }
 tonic = "0.2"
 bytes = "0.5"
 prost = "0.6"

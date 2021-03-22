@@ -58,7 +58,7 @@ use crate::record_batch::RecordBatch;
 use self::csv_crate::{StringRecord, StringRecordsIntoIter};
 
 lazy_static! {
-    static ref DECIMAL_RE: Regex = Regex::new(r"^-?(\d+\.\d+)$").unwrap();
+    static ref DECIMAL_RE: Regex = Regex::new(r"^(-?\d+\.\d+)|(-?inf)|(nan)$").unwrap();
     static ref INTEGER_RE: Regex = Regex::new(r"^-?(\d+)$").unwrap();
     static ref BOOLEAN_RE: Regex = RegexBuilder::new(r"^(true)$|^(false)$")
         .case_insensitive(true)
@@ -76,7 +76,7 @@ fn infer_field_schema(string: &str) -> DataType {
     // match regex in a particular order
     if BOOLEAN_RE.is_match(string) {
         DataType::Boolean
-    } else if DECIMAL_RE.is_match(string) {
+    } else if DECIMAL_RE.is_match(&string.to_lowercase()) {
         DataType::Float64
     } else if INTEGER_RE.is_match(string) {
         DataType::Int64
@@ -420,11 +420,21 @@ impl<R: Read> Reader<R> {
         let mut builder = PrimitiveBuilder::<T>::new(rows.len());
         let is_boolean_type =
             *self.schema.field(col_idx).data_type() == DataType::Boolean;
+        let is_float_type = match *self.schema.field(col_idx).data_type() {
+            DataType::Float16 | DataType::Float32 | DataType::Float64 => true,
+            _ => false,
+        };
         for (row_index, row) in rows.iter().enumerate() {
             match row.get(col_idx) {
                 Some(s) if !s.is_empty() => {
                     let t = if is_boolean_type {
                         s.to_lowercase().parse::<T::Native>()
+                    } else if is_float_type {
+                        if s.to_lowercase() == "nan" {
+                            "NaN".parse::<T::Native>()
+                        } else {
+                            s.to_lowercase().parse::<T::Native>()
+                        }
                     } else {
                         s.parse::<T::Native>()
                     };
